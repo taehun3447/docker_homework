@@ -1,23 +1,32 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror.kakao.com/ubuntu/|g' /etc/apt/sources.list
+
+RUN apt update && apt install -y \
     build-essential \
     git \
     wget \
-    pkg-config \
-    libopencv-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libcurl4-openssl-dev
 
-COPY darknet /darknet
+WORKDIR /
+
+RUN git clone https://github.com/pjreddie/darknet.git
+
 WORKDIR /darknet
 
-RUN sed -i 's/OPENCV=0/OPENCV=1/' Makefile
+RUN sed -i 's/OPENCV=1/OPENCV=0/' Makefile
 RUN make
 
-RUN wget https://pjreddie.com/media/files/yolov3.weights
+RUN wget https://pjreddie.com/media/files/yolov3.weights -O yolov3.weights
 
-# URL을 환경변수(URL)로 받아 처리
-ENTRYPOINT ["bash", "-c"]
-CMD ["wget -O input.jpg \"$URL\" && ./darknet detector test cfg/coco.data cfg/yolov3.cfg yolov3.weights input.jpg -dont_show && echo 'Done'"]
+# URL 입력 받아서 다운로드 → darknet 실행하는 스크립트 추가
+RUN echo '#!/bin/bash\n\
+URL="$1"\n\
+wget "$URL" -O input.jpg\n\
+./darknet detect cfg/yolov3.cfg yolov3.weights input.jpg\n' > /darknet/run.sh
+
+RUN chmod +x /darknet/run.sh
+
+ENTRYPOINT ["/darknet/run.sh"]
